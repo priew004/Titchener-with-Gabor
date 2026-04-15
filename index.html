@@ -58,7 +58,7 @@
   function handleConsent(consentGiven) {
     if (consentGiven) {
       // Pass the parameters to the experiment file
-      const nextUrl = `pilot_noinducers.html?PROLIFIC_PID=${pid}&STUDY_ID=${studyId}&SESSION_ID=${sessionId}`;
+      const nextUrl = `gabor_pilot.html?PROLIFIC_PID=${pid}&STUDY_ID=${studyId}&SESSION_ID=${sessionId}`;
       window.location.href = nextUrl;
     } else {
       // Replace with your actual Return/Decline code
