@@ -4,15 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Consent & Study Router</title>
-  <script src="https://unpkg.com/jspsych@8.2.1"></script>
-  <link href="https://unpkg.com/jspsych@8.2.1/css/jspsych.css" rel="stylesheet" type="text/css" />
-  
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; background-color: #f4f4f9; color: #333; padding: 40px 20px; }
     .consent-container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
     h1 { text-align: center; color: #2c3e50; margin-top: 0; }
     .consent-text { font-size: 15px; color: #444; margin-bottom: 30px; }
-    .highlight { background: #fff3cd; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
     .buttons { text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
     button { padding: 14px 30px; margin: 10px; font-size: 16px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; }
     button.agree { background-color: #27ae60; color: white; }
@@ -34,9 +30,9 @@
     <p><strong>Purpose:</strong> This study investigates how the human visual system calculates the physical size of objects based on their internal texture. We are measuring how different spatial frequencies (stripe patterns) and borders change our perception of scale.</p>
 
     <p><strong>What You’ll Do:</strong> 
-      On each trial, you will see two striped circular patches appear on the screen. Look carefully at both, and decide which patch is <b>physically larger in diameter</b>. 
+      On each trial, you will see two striped circular patches appear on the screen. Look carefully at both, and decide which patch <b>appears larger overall</b>. 
       <br><br>
-      You will use the <b>[ Left Arrow ]</b> and <b>[ Right Arrow ]</b> keys to indicate your choice. The experiment consists of several short blocks and will take roughly 5-10 minutes.
+      You will use the <b>[ Left Arrow ]</b> and <b>[ Right Arrow ]</b> keys to indicate your choice. Go with your immediate gut reaction. The experiment consists of several short blocks and will take roughly 5-10 minutes.
     </p>
 
     <p><strong>Confidentiality:</strong> Data is linked only to your Prolific ID. No names are collected.</p>
@@ -53,23 +49,19 @@
 </div>
 
 <script>
-  // Capture URL parameters from Prolific
+  // Capture URL parameters from Prolific so they aren't lost in the redirect
   const urlParams = new URLSearchParams(window.location.search);
-  const pid = urlParams.get('PROLIFIC_PID') || "unknown_" + Math.floor(Math.random() * 1000);
+  const pid = urlParams.get('PROLIFIC_PID') || "unknown_user";
   const studyId = urlParams.get('STUDY_ID') || "default";
   const sessionId = urlParams.get('SESSION_ID') || "default";
 
   function handleConsent(consentGiven) {
     if (consentGiven) {
-      // Build the URL for the new Gabor Pilot file
-      // Make sure this matches the actual file name of your PsychoJS experiment!
-      let targetFile = "gabor_pilot.html"; 
-      
-      const nextUrl = `${targetFile}?PROLIFIC_PID=${pid}&STUDY_ID=${studyId}&SESSION_ID=${sessionId}`;
-      
+      // Pass the parameters to the experiment file
+      const nextUrl = `pilot_noinducers.html?PROLIFIC_PID=${pid}&STUDY_ID=${studyId}&SESSION_ID=${sessionId}`;
       window.location.href = nextUrl;
     } else {
-      // Standard Prolific Decline/Return URL
+      // Replace with your actual Return/Decline code
       window.location.href = "https://app.prolific.com/submissions/complete?cc=C9EPBKBC"; 
     }
   }
