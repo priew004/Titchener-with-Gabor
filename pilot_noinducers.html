@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gabor Size Perception - PsychoJS Pilot</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background-color: rgb(128, 128, 128); /* Neutral Psychophysics Gray */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            color: white;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+        }
+
+        #experiment-container {
+            position: relative;
+            width: 1000px; height: 600px;
+            border: 2px solid rgb(100, 100, 100);
+            background-color: rgb(128, 128, 128);
+            display: none; /* Hidden until PsychoJS init finishes */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 1000px; height: 600px; 
+        }
+
+        #fixation-dot {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background-color: black;
+            display: none;
+        }
+
+        .overlay {
+            position: fixed; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            text-align: center; box-sizing: border-box; padding: 40px;
+            z-index: 200; color: #ccc;
+        }
+
+        .overlay h1 { margin-bottom: 10px; color: rgb(0, 255, 204); text-transform: uppercase; letter-spacing: 2px;}
+        .overlay p { max-width: 700px; font-size: 1.1em; line-height: 1.5; color: #eee; margin-bottom: 15px;}
+        .highlight { color: #ffeb3b; font-weight: bold; }
+        
+        #start-btn { 
+            padding: 15px 40px; font-size: 18px; cursor: pointer; 
+            background: #222; color: #00ffcc; border: 1px solid #00ffcc; 
+            border-radius: 5px; margin-top: 30px; transition: 0.3s; 
+        }
+        #start-btn:hover { background: #00ffcc; color: #000; }
+        
+        #ui-layer { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; display: flex; flex-direction: column; 
+            justify-content: space-between; align-items: center; z-index: 100; 
+            display: none;
+        }
+        .hud { color: #222; margin-top: 20px; font-size: 14px; letter-spacing: 1px; font-weight: bold;}
+        .panel { background: rgba(10,10,10,0.9); padding: 15px 40px; border-radius: 50px; border: 1px solid #333; margin-bottom: 40px; color: #eee; pointer-events: auto; }
+    </style>
+</head>
+<body>
+
+    <div id="overlay-screen" class="overlay">
+        <div id="status">INITIALIZING EXPERIMENT...</div>
+        <div id="instructions" style="display:none;">
+            <h1>Visual Perception Study</h1>
+            <p>On each trial, you will see two striped patches appear. There is no time limit.</p>
+            <p>Decide which patch is <span class="highlight">physically larger in diameter</span>.</p>
+            <p><b>[ Left Arrow ]</b> = Left patch is larger<br>
+            <b>[ Right Arrow ]</b> = Right patch is larger</p>
+            <p>Please stay focused on the center dot between trials.</p>
+            <button id="start-btn">START EXPERIMENT</button>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <div id="trial-counter" class="hud">READY</div>
+        <div class="panel"><b>[ &larr; ]</b> Left Larger &nbsp;&nbsp; | &nbsp;&nbsp; <b>[ &rarr; ]</b> Right Larger</div>
+    </div>
+
+    <div id="experiment-container">
+        <canvas id="main-canvas"></canvas>
+        <div id="fixation-dot"></div>
+    </div>
+
+<script type="module">
+    import * as psychojs_module from './lib/psychojs-2021.2.2.js';
+    const PsychoJS = psychojs_module.PsychoJS || psychojs_module.core.PsychoJS;
+    const psychoJS = new PsychoJS({ debug: true });
+
+    // --- Routing & Parameters ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const pid = urlParams.get('PROLIFIC_PID') || 'unknown';
+    const studyId = urlParams.get('STUDY_ID') || 'unknown';
+    const sessionId = urlParams.get('SESSION_ID') || 'unknown';
+    
+    // Replace with your actual completion code
+    const completionCode = "YOUR_PROLIFIC_CODE"; 
+    const prolificUrl = "https://app.prolific.co/submissions/complete?cc=" + completionCode;
+
+    // --- DOM Elements ---
+    const container = document.getElementById('experiment-container');
+    const fixation = document.getElementById('fixation-dot');
+    const canvas = document.getElementById('main-canvas');
+    const ctx = canvas.getContext('2d');
+    const uiLayer = document.getElementById('ui-layer');
+
+    function scaleCanvasForHighDPI() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', scaleCanvasForHighDPI);
+
+    // --- EXPERIMENTAL PARAMETERS ---
+    const TARGET_BASE_RADIUS = 35; 
+    const GABOR_CONTRAST = 0.8; 
+    const FIXED_ORIENTATION_RAD = Math.PI / 2; 
+    const TIME_ITI = 500; 
+
+    const TRIALS_PER_BLOCK = 20; 
+    let currentTrialN = 0;
+    let isTrialActive = false;
+    let trialStartTime = 0;
+    
+    let staircaseRightRadius = TARGET_BASE_RADIUS; 
+    const SIZE_STEP = 1.5; 
+
+    let currentCondition = 0;
+    const CONDITIONS = [
+        { id: "Control", refSF: 4, refHard: false, testSF: 4, testHard: false }, 
+        { id: "High_SF", refSF: 4, refHard: false, testSF: 10, testHard: false }, 
+        { id: "Low_SF", refSF: 4, refHard: false, testSF: 2, testHard: false },  
+        { id: "Hard_Border", refSF: 4, refHard: false, testSF: 4, testHard: true } 
+    ];
+
+    // --- PSYCHOJS INIT ---
+    async function initPsychoJS() {
+        try {
+            await psychoJS.start({ 
+                expName: 'Gabor_Size_Pilot', 
+                expInfo: { 'participant': pid, 'study_id': studyId, 'session_id': sessionId } 
+            });
+            document.getElementById('status').style.display = 'none';
+            document.getElementById('instructions').style.display = 'block';
+        } catch (err) { console.error(err); }
+    }
+
+    // --- GRAPHICS GENERATION ---
+    function generatePatchBuffer(radius, sf_cycles, orientation_rad, contrast, isHardBorder) {
+        const size = Math.ceil(radius * 2);
+        const buffer = document.createElement('canvas');
+        buffer.width = size; buffer.height = size;
+        const bCtx = buffer.getContext('2d');
+        const imgData = bCtx.createImageData(size, size);
+        const data = imgData.data;
+        const sigma = radius / 3.5; 
+        const sf_pix_rad = (sf_cycles * Math.PI * 2) / size;
+
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                const relX = x - radius;
+                const relY = y - radius;
+                const distSq = (relX * relX) + (relY * relY);
+
+                if (distSq > radius * radius) continue; 
+
+                const envelope = isHardBorder ? 1.0 : Math.exp(-distSq / (2 * sigma * sigma));
+                const x_prime = relX * Math.cos(orientation_rad) + relY * Math.sin(orientation_rad);
+                const sine_wave = Math.cos(sf_pix_rad * x_prime);
+                const gratingValue = envelope * sine_wave;
+                const finalLum = 128 + (gratingValue * 127 * contrast);
+
+                const index = (y * size + x) * 4;
+                data[index] = data[index + 1] = data[index + 2] = finalLum;
+                
+                if (isHardBorder && distSq > (radius - 1) * (radius - 1)) {
+                    data[index + 3] = 255 * (radius - Math.sqrt(distSq));
+                } else {
+                    data[index + 3] = 255;
+                }
+            }
+        }
+        bCtx.putImageData(imgData, 0, 0);
+        return buffer;
+    }
+
+    function drawStimuli(rightTargetRadius, cond) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cxLeft = 300, cxRight = 700, cy = 300;
+        
+        const leftBuffer = generatePatchBuffer(TARGET_BASE_RADIUS, cond.refSF, FIXED_ORIENTATION_RAD, GABOR_CONTRAST, cond.refHard);
+        ctx.drawImage(leftBuffer, cxLeft - TARGET_BASE_RADIUS, cy - TARGET_BASE_RADIUS);
+
+        const rightBuffer = generatePatchBuffer(rightTargetRadius, cond.testSF, FIXED_ORIENTATION_RAD, GABOR_CONTRAST, cond.testHard);
+        ctx.drawImage(rightBuffer, cxRight - rightTargetRadius, cy - rightTargetRadius);
+    }
+
+    // --- TRIAL LOGIC ---
+    function initCondition() {
+        if (currentCondition >= CONDITIONS.length) {
+            finishExperiment();
+            return;
+        }
+        const jitter = (Math.random() * 10) - 5;
+        staircaseRightRadius = TARGET_BASE_RADIUS + jitter; 
+        currentTrialN = 0;
+        nextTrial();
+    }
+
+    function nextTrial() {
+        if (currentTrialN >= TRIALS_PER_BLOCK) {
+            currentCondition++;
+            initCondition();
+            return;
+        }
+
+        isTrialActive = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        fixation.style.display = 'block';
+        
+        setTimeout(() => {
+            fixation.style.display = 'none';
+            drawStimuli(staircaseRightRadius, CONDITIONS[currentCondition]);
+            
+            document.getElementById('trial-counter').innerText = 
+                `BLOCK ${currentCondition + 1}/${CONDITIONS.length} | TRIAL ${currentTrialN + 1}/${TRIALS_PER_BLOCK}`;
+            
+            trialStartTime = performance.now();
+            isTrialActive = true;
+        }, TIME_ITI);
+    }
+
+    // --- INPUT & DATA SAVING ---
+    window.addEventListener('keydown', (e) => {
+        if (!isTrialActive) return;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            const rt = performance.now() - trialStartTime;
+            const resp = e.key === 'ArrowLeft' ? 'left' : 'right';
+            const cond = CONDITIONS[currentCondition];
+            
+            // Save data to Pavlovia via PsychoJS
+            psychoJS.experiment.addData('block_id', cond.id);
+            psychoJS.experiment.addData('trial_number', currentTrialN + 1);
+            psychoJS.experiment.addData('ref_radius_px', TARGET_BASE_RADIUS);
+            psychoJS.experiment.addData('test_radius_px', staircaseRightRadius.toFixed(2));
+            psychoJS.experiment.addData('chose_left', (resp === 'left') ? 1 : 0);
+            psychoJS.experiment.addData('rt_ms', Math.round(rt));
+            
+            // Staircase Logic
+            if (resp === 'right') staircaseRightRadius -= SIZE_STEP;
+            else staircaseRightRadius += SIZE_STEP;
+            
+            staircaseRightRadius = Math.max(10, Math.min(70, staircaseRightRadius));
+
+            // Push row to CSV
+            psychoJS.experiment.nextEntry();
+            
+            currentTrialN++; 
+            nextTrial();
+        }
+    });
+
+    // --- END ROUTINE ---
+    async function finishExperiment() {
+        isTrialActive = false;
+        uiLayer.style.display = 'none';
+        container.style.display = 'none';
+        
+        const overlay = document.getElementById('overlay-screen');
+        const status = document.getElementById('status');
+        overlay.style.display = 'flex';
+        status.style.display = 'block';
+        status.innerHTML = "SAVING DATA...<br>Please wait to be redirected to Prolific.";
+
+        try {
+            await psychoJS.quit({ isCompleted: true, closeWindow: false });
+            window.location.href = prolificUrl;
+        } catch (e) {
+            console.error(e);
+            window.location.href = prolificUrl;
+        }
+    }
+
+    // --- START SEQUENCE ---
+    document.getElementById('start-btn').addEventListener('click', () => { 
+        if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        document.getElementById('overlay-screen').style.display = 'none';
+        container.style.display = 'block';
+        uiLayer.style.display = 'flex';
+        scaleCanvasForHighDPI();
+        initCondition();
+    });
+
+    window.onload = initPsychoJS;
+</script>
+</body>
+</html>
