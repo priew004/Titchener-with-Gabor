@@ -49,19 +49,22 @@
 </div>
 
 <script>
-  // Capture URL parameters from Prolific so they aren't lost in the redirect
+  // 1. Grab parameters from Prolific's initial entry link
   const urlParams = new URLSearchParams(window.location.search);
   const pid = urlParams.get('PROLIFIC_PID') || "unknown_user";
   const studyId = urlParams.get('STUDY_ID') || "default";
   const sessionId = urlParams.get('SESSION_ID') || "default";
 
+  // 2. Save them invisibly into the browser's temporary memory
+  sessionStorage.setItem('PROLIFIC_PID', pid);
+  sessionStorage.setItem('STUDY_ID', studyId);
+  sessionStorage.setItem('SESSION_ID', sessionId);
+
   function handleConsent(consentGiven) {
     if (consentGiven) {
-      // Pass the parameters to the experiment file
-      const nextUrl = `gabor_pilot.html?PROLIFIC_PID=${pid}&STUDY_ID=${studyId}&SESSION_ID=${sessionId}`;
-      window.location.href = nextUrl;
+      // 3. PURE LINK. No parameters. Fixes the 404 error.
+      window.location.href = "gabor_pilot.html";
     } else {
-      // Replace with your actual Return/Decline code
       window.location.href = "https://app.prolific.com/submissions/complete?cc=C9EPBKBC"; 
     }
   }

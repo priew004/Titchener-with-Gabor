@@ -7,7 +7,7 @@
     <style>
         body {
             margin: 0; padding: 0;
-            background-color: rgb(128, 128, 128); /* Neutral Psychophysics Gray */
+            background-color: rgb(128, 128, 128);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             color: white;
             display: flex; justify-content: center; align-items: center;
@@ -19,7 +19,7 @@
             width: 1000px; height: 600px;
             border: 2px solid rgb(100, 100, 100);
             background-color: rgb(128, 128, 128);
-            display: none; /* Hidden until PsychoJS init finishes */
+            display: none; 
         }
 
         canvas {
@@ -75,9 +75,9 @@
         <div id="instructions" style="display:none;">
             <h1>Visual Perception Study</h1>
             <p>On each trial, you will see two striped patches appear. There is no time limit.</p>
-            <p>Decide which patch is <span class="highlight">physically larger in diameter</span>.</p>
-            <p><b>[ Left Arrow ]</b> = Left patch is larger<br>
-            <b>[ Right Arrow ]</b> = Right patch is larger</p>
+            <p>Decide which patch <span class="highlight">appears larger overall</span>.</p>
+            <p><b>[ Left Arrow ]</b> = Left patch appears larger<br>
+            <b>[ Right Arrow ]</b> = Right patch appears larger</p>
             <p>Please stay focused on the center dot between trials.</p>
             <button id="start-btn">START EXPERIMENT</button>
         </div>
@@ -98,14 +98,14 @@
     const PsychoJS = psychojs_module.PsychoJS || psychojs_module.core.PsychoJS;
     const psychoJS = new PsychoJS({ debug: true });
 
-    // --- Routing & Parameters ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const pid = urlParams.get('PROLIFIC_PID') || 'unknown';
-    const studyId = urlParams.get('STUDY_ID') || 'unknown';
-    const sessionId = urlParams.get('SESSION_ID') || 'unknown';
+    // --- PROLIFIC ROUTING (Via Session Storage) ---
+    // Grabs the ID that index.html invisibly saved in the browser memory
+    const pid = sessionStorage.getItem('PROLIFIC_PID') || 'unknown';
+    const studyId = sessionStorage.getItem('STUDY_ID') || 'unknown';
+    const sessionId = sessionStorage.getItem('SESSION_ID') || 'unknown';
     
-    // Replace with your actual completion code
-    const completionCode = "YOUR_PROLIFIC_CODE"; 
+    // --> PUT YOUR COMPLETION CODE HERE <--
+    const completionCode = "YOUR_PROLIFIC_COMPLETION_CODE"; 
     const prolificUrl = "https://app.prolific.co/submissions/complete?cc=" + completionCode;
 
     // --- DOM Elements ---
@@ -150,7 +150,8 @@
     async function initPsychoJS() {
         try {
             await psychoJS.start({ 
-                expName: 'Gabor_Size_Pilot', 
+                expName: 'Gabor_Pilot_NoInducers', 
+                // Injects the Prolific ID into every row of the Pavlovia CSV
                 expInfo: { 'participant': pid, 'study_id': studyId, 'session_id': sessionId } 
             });
             document.getElementById('status').style.display = 'none';
@@ -251,7 +252,7 @@
             const resp = e.key === 'ArrowLeft' ? 'left' : 'right';
             const cond = CONDITIONS[currentCondition];
             
-            // Save data to Pavlovia via PsychoJS
+            // Log trial data to Pavlovia via PsychoJS
             psychoJS.experiment.addData('block_id', cond.id);
             psychoJS.experiment.addData('trial_number', currentTrialN + 1);
             psychoJS.experiment.addData('ref_radius_px', TARGET_BASE_RADIUS);
@@ -259,13 +260,11 @@
             psychoJS.experiment.addData('chose_left', (resp === 'left') ? 1 : 0);
             psychoJS.experiment.addData('rt_ms', Math.round(rt));
             
-            // Staircase Logic
             if (resp === 'right') staircaseRightRadius -= SIZE_STEP;
             else staircaseRightRadius += SIZE_STEP;
             
             staircaseRightRadius = Math.max(10, Math.min(70, staircaseRightRadius));
 
-            // Push row to CSV
             psychoJS.experiment.nextEntry();
             
             currentTrialN++; 
